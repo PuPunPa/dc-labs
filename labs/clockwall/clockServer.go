@@ -2,16 +2,19 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"time"
 )
 
 func handleConn(c net.Conn) {
 	defer c.Close()
 	for {
-		_, err := io.WriteString(c, time.Now().Format("15:04:05\n"))
+		_, err := io.WriteString(c, fmt.Sprint(time.Now().Location(), " : ", time.Now().Format("15:04:05\n")))
 		if err != nil {
 			return // e.g., client disconnected
 		}
@@ -20,7 +23,10 @@ func handleConn(c net.Conn) {
 }
 
 func main() {
-	listener, err := net.Listen("tcp", "localhost:9090")
+	portPtr := flag.Int("port", 9090, "port to be used")
+	flag.Parse()
+	portStr := "localhost:" + strconv.Itoa(*portPtr)
+	listener, err := net.Listen("tcp", portStr)
 	if err != nil {
 		log.Fatal(err)
 	}
