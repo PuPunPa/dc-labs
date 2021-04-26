@@ -13,6 +13,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -42,24 +43,57 @@ func crawl(url string) []string {
 //!+
 func main() {
 	worklist := make(chan []string)
+	depthPtr := flag.Int("depth", 0, "depth to crawl")
+	resultsPtr := flag.String("results", "results.txt", "save to txt file")
+	flag.Parse()
+	depth := *depthPtr
+	results := *resultsPtr
 	var n int // number of pending sends to worklist
 
 	// Start with the command-line arguments.
 	n++
-	go func() { worklist <- os.Args[1:] }()
+
+	argSize := len(os.Args)
+	go func() { worklist <- os.Args[argSize-1:] }()
+
+	// make output file
+	fo, err := os.Create(results)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// close fo on exit and check for its returned error
+	defer func() {
+		if err := fo.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	// Crawl the web concurrently.
 	seen := make(map[string]bool)
 	for ; n > 0; n-- {
-		list := <-worklist
-		for _, link := range list {
-			if !seen[link] {
-				seen[link] = true
-				n++
-				go func(link string) {
-					worklist <- crawl(link)
-				}(link)
+		if depth > 0 {
+			list := <-worklist
+			for _, link := range list {
+				if !seen[link] {
+					seen[link] = true
+					n++
+					go func(link string) {
+						worklist <- crawl(link)
+					}(link)
+
+					// write a chunk
+					if _, err := fo.Write([]byte(link)); err != nil {
+						log.Fatal(err)
+					}
+					if _, err := fo.Write([]byte("\n")); err != nil {
+						log.Fatal(err)
+					}
+
+				}
 			}
+			depth--
+		} else {
+			break
 		}
 	}
 }
