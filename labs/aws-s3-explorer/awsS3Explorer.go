@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -12,11 +13,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type ListBucketResult struct {
-	Contents []Contents `xml:"Contents`
+	Contents []Contents `xml:"Contents"`
 }
 
 type Contents struct {
@@ -33,11 +33,11 @@ type Send struct {
 func writeJson(bucket string) []byte {
 	resp, err := http.Get("http://s3.amazonaws.com/" + bucket)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("ERROR1: " + err.Error())
 	}
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("ERROR2: " + err.Error())
 	}
 
 	var body ListBucketResult
@@ -45,7 +45,7 @@ func writeJson(bucket string) []byte {
 
 	content, err := json.Marshal(body.Contents)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("ERROR3: " + err.Error())
 	}
 
 	contentStr := string(content[1 : len(content)-1])
@@ -68,23 +68,32 @@ func writeJson(bucket string) []byte {
 	}
 	s := Send{bucket, objsCnt, len(dirs), exts}
 	send, err := json.Marshal(s)
+	fmt.Println(string(send))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("ERROR4" + err.Error())
 	}
 	return send
 }
 
 func handleConn(c net.Conn) {
 	defer c.Close()
-	for {
-		bs := bufio.NewReader(c)
-		bucket, _, _ := bs.ReadLine()
-		_, err := io.WriteString(c, string(writeJson(string(bucket))))
-		if err != nil {
-			return // e.g., client disconnected
-		}
-		time.Sleep(1 * time.Second)
+	bs := bufio.NewReader(c)
+	bucket := getMessage(bs)
+	_, err := io.WriteString(c, string(writeJson(string(bucket))))
+	if err != nil {
+		log.Fatal("ERROR5: " + err.Error())
+		return // e.g., client disconnected
 	}
+	fmt.Println("Sent")
+}
+
+func getMessage(bs *bufio.Reader) []byte {
+	var message []byte
+	prefix := true
+	for prefix {
+		message, prefix, _ = bs.ReadLine()
+	}
+	return message
 }
 
 func main() {
@@ -93,12 +102,12 @@ func main() {
 	portStr := "localhost:" + strconv.Itoa(*portPtr)
 	listener, err := net.Listen("tcp", portStr)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("ERROR7: " + err.Error())
 	}
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Print(err) // e.g., connection aborted
+			log.Fatal("ERROR8: " + err.Error()) // e.g., connection aborted
 			continue
 		}
 		go handleConn(conn) // handle connections concurrently

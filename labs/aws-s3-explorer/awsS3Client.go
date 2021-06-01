@@ -8,7 +8,10 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"sync"
 )
+
+var wg sync.WaitGroup
 
 func handleDial(port int, bucket string, c chan string) {
 	conn, err := net.Dial("tcp", "localhost:"+strconv.Itoa(port))
@@ -21,8 +24,24 @@ func handleDial(port int, bucket string, c chan string) {
 		log.Fatal(err)
 	}
 	bs := bufio.NewReader(conn)
-	line, _, _ := bs.ReadLine()
+	line := getMessage(bs)
+	defer wg.Done()
 	c <- string(line)
+}
+
+func getMessage(bs *bufio.Reader) []byte {
+	var message []byte
+	var err error
+	prefix := false
+	for prefix {
+		message, prefix, err = bs.ReadLine()
+		fmt.Println(prefix)
+		if err != nil {
+			log.Fatal(err.Error())
+			return nil // e.g., client disconnected
+		}
+	}
+	return message
 }
 
 func main() {
@@ -30,6 +49,7 @@ func main() {
 	bucketPtr := flag.String("bucket", "ryft-public-sample-data", "bucket to request")
 	flag.Parse()
 	c := make(chan string, 1)
+	wg.Add(1)
 	go handleDial(*portPtr, *bucketPtr, c)
 	for item := range c {
 		fmt.Println(item)
